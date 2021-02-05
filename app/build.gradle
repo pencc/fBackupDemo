@@ -16,6 +16,21 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        platform {
+            storeFile file('../certs/platform.keystore')
+            storePassword 'android'
+            keyAlias = 'platform'
+            keyPassword 'android'
+        }
+        debug {
+            storeFile file('../certs/platform.keystore')
+            storePassword 'android'
+            keyAlias 'platform'
+            keyPassword 'android'
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
