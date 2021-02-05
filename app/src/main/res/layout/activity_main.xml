@@ -6,31 +6,44 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="226dp"
+        android:layout_height="84dp"
+        android:layout_marginTop="100dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:text="Welcome"
+        android:textSize="40sp"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
     <Button
         android:id="@+id/button"
         android:layout_width="152dp"
         android:layout_height="70dp"
+        android:layout_marginTop="132dp"
+        android:gravity="center"
+        android:orientation="horizontal"
         android:text="备份"
         android:textSize="20sp"
-        tools:layout_editor_absoluteX="129dp"
-        tools:layout_editor_absoluteY="384dp" />
+        app:layout_constraintHorizontal_bias="0.501"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/textView" />
 
     <Button
         android:id="@+id/button2"
         android:layout_width="152dp"
         android:layout_height="70dp"
+        android:layout_marginTop="96dp"
+        android:gravity="center"
+        android:orientation="horizontal"
         android:text="还原"
         android:textSize="20sp"
-        tools:layout_editor_absoluteX="129dp"
-        tools:layout_editor_absoluteY="488dp" />
-
-    <TextView
-        android:id="@+id/textView"
-        android:layout_width="298dp"
-        android:layout_height="60dp"
-        android:gravity="center"
-        android:text="WelCome"
-        android:textSize="30sp"
-        tools:layout_editor_absoluteX="56dp"
-        tools:layout_editor_absoluteY="181dp" />
+        app:layout_constraintHorizontal_bias="0.501"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/button" />
 </androidx.constraintlayout.widget.ConstraintLayout>
