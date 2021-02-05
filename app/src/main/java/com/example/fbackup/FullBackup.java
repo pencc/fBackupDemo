@@ -1,7 +1,6 @@
 package com.example.fbackup;
 
 import android.os.Environment;
-import android.os.FileUtils;
 import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
@@ -13,14 +12,43 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.channels.FileChannel;
-import java.util.ArrayList;
 
 public class FullBackup {
-    public void backupApk(String mPkgName) {
+
+    private void copyFile_channelCopy(String src_file, String dst_file) {
+        FileInputStream fin = null;
+        FileOutputStream fout = null;
+        FileChannel finChannel = null;
+        FileChannel foutChannel = null;
         try {
-            // /storage/emulated/0/backup/{pkgname}/backup.ab
-            String sdPath = Environment.getExternalStorageDirectory().getPath();
-            String backupDirPath = sdPath + "/fBackup/" + mPkgName;
+            fin = new FileInputStream(src_file);
+            fout = new FileOutputStream(dst_file);
+
+            finChannel = fin.getChannel();
+            foutChannel = fout.getChannel();
+
+            //直接把通道进行数据传输
+            // transferTo 和 transferFrom两者选1即可
+//        finChannel.transferTo(0,finChannel.size(),foutChannel);
+            foutChannel.transferFrom(finChannel, 0, finChannel.size());
+            //正式写法是需要写在 try-catch-finally 中的，处理仅作为学习
+            finChannel.close();
+            foutChannel.close();
+            fin.close();
+            fout.close();
+        } catch (Exception e) {
+            // todo
+            Log.e("FullBackup", "fail to copy back");
+        }
+    }
+
+    // the apk{mPkgName} will backup to /storage/emulated/0/fBackup/{mPkgName}/backup.ab
+    // "/storage/emulated/0/fTmp/{mPkgName}/" is the tmp dir in backuping and restoring
+    public void backupApk(String mPkgName) {
+        // /storage/emulated/0/backup/{pkgname}/backup.ab
+        String sdPath = Environment.getExternalStorageDirectory().getPath();
+        try {
+            String backupDirPath = sdPath + "/fTmp/" + mPkgName;
             File dir = new File(backupDirPath);
             if (!dir.exists()) {
                 dir.mkdirs();
@@ -28,7 +56,7 @@ public class FullBackup {
 
             String[] pkgList = {mPkgName};
 
-            String backupFilePath = sdPath + "/fBackup/" + mPkgName + "/backup2.ab";
+            String backupFilePath = sdPath + "/fTmp/" + mPkgName + "/backup.ab";
             File file = new File(backupFilePath);
             if (!file.exists()) {
                 try {
@@ -39,7 +67,6 @@ public class FullBackup {
                 }
             }
             file = new File(backupFilePath);
-            //原理是反射调用BackupManagerService.fullbackup
             Class<?> serviceManager = Class.forName("android.os.ServiceManager");
             Method getService = serviceManager.getMethod("getService", String.class);
             getService.setAccessible(true);
@@ -64,21 +91,12 @@ public class FullBackup {
                     }
                     Method method = methods[i];
                     if ("adbBackup".equals(method.getName())) {
-                        //需要android.permission.BACKUP权限，hook权限检查
-//                           //fullBackup: uid 10065 does not have android.permission.BACKUP.
-//                            android.Manifest.permission.BACKUP
-
-                        //fullBackup原方法及参数
-                        boolean includeApks = true;
-                        //obb文件
+                        boolean includeApks = false;
                         boolean includeObbs = false;
-                        //sdcard文件
-                        boolean includeShared = true;
+                        boolean includeShared = false;
                         boolean doWidgets = false;
-                        //是否所有app
                         boolean doAllApps = false;
-                        //是否包括系统
-                        boolean includeSystem = false;
+                        boolean includeSystem = true;
                         boolean compress = true;
                         boolean doKeyValue = false;
                         method.setAccessible(true);
@@ -88,6 +106,17 @@ public class FullBackup {
                                 Boolean.valueOf(doAllApps), Boolean.valueOf(includeSystem),
                                 Boolean.valueOf(compress), Boolean.valueOf(doKeyValue),
                                 pkgList});
+
+                        // copy backup file to our backupDir
+                        String backupDir = sdPath + "/fBackup/" + mPkgName;
+                        File bdir = new File(backupDir);
+                        if (!bdir.exists()) {
+                            bdir.mkdirs();
+                        }
+                        copyFile_channelCopy(sdPath + "/fTmp/" + mPkgName + "/backup.ab",
+                                sdPath + "/fBackup/" + mPkgName + "/backup.ab");
+                        // delete orig file to free space
+                        file.delete();
                         break;
                     }
                     i++;                }
@@ -127,39 +156,15 @@ public class FullBackup {
         }
     }
 
-    private void nioTransferCopy(File source, File target) {
-        FileChannel in = null;
-        FileChannel out = null;
-        FileInputStream inStream = null;
-        FileOutputStream outStream = null;
-        try {
-            inStream = new FileInputStream(source);
-            outStream = new FileOutputStream(target);
-            in = inStream.getChannel();
-            out = outStream.getChannel();
-            in.transferTo(0, in.size(), out);
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                inStream.close();
-                in.close();
-                outStream.close();
-                out.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
     public void restoreApk(String mPkgName) {
         try {
             String sdPath = Environment.getExternalStorageDirectory().getPath();
-            String SourceFilePath = sdPath + "/fBackup/" + mPkgName + "/backup2.ab";
-            String backupFilePath = sdPath + "/fBackup/" + mPkgName + "/backup.ab";
-            File sfile = new File(SourceFilePath);
+
+            copyFile_channelCopy(sdPath + "/fBackup/" + mPkgName + "/backup.ab",
+                    sdPath + "/fTmp/" + mPkgName + "/backup.ab");
+
+            String backupFilePath = sdPath + "/fTmp/" + mPkgName + "/backup.ab";
             File file = new File(backupFilePath);
-            nioTransferCopy(sfile, file);
 
             //原理是反射调用BackupManagerService.fullbackup
             Class<?> serviceManager = Class.forName("android.os.ServiceManager");
