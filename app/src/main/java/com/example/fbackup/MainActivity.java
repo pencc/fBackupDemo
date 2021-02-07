@@ -1,16 +1,25 @@
 package com.example.fbackup;
 
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.PermissionInfo;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.UserHandle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+
+import java.lang.reflect.Method;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
     private final int READ_SDCARD_REQ = 0;
@@ -76,6 +85,47 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    private void grant(PackageManager packageManager, String pkgName) {
+        try {
+            int uid = packageManager.getApplicationInfo("com.android.settings", 0).uid;
+            UserHandle userHandle = UserHandle.getUserHandleForUid(uid);
+
+            Class<?> refPackageManager = packageManager.getClass();
+            Method refGrantRuntimePermission = refPackageManager.getDeclaredMethod("grantRuntimePermission", String.class, String.class, UserHandle.class);
+            refGrantRuntimePermission.setAccessible(true);
+            refGrantRuntimePermission.invoke(packageManager, pkgName, Manifest.permission.READ_EXTERNAL_STORAGE, userHandle);
+        } catch (Exception e) {
+
+        }
+    }
+
+    private void checkPermission(String pkgName) {
+        StringBuffer appNameAndPermissions=new StringBuffer();
+        PackageManager pm = getPackageManager();
+        List<ApplicationInfo> packages = pm.getInstalledApplications(PackageManager.GET_META_DATA);
+        for (ApplicationInfo applicationInfo : packages) {
+            if(!applicationInfo.packageName.equals(pkgName))
+                continue;
+            Log.d("test", "App: " + applicationInfo.name + " Package: " + applicationInfo.packageName);
+            try {
+                PackageInfo packageInfo = pm.getPackageInfo(applicationInfo.packageName, PackageManager.GET_PERMISSIONS);
+                appNameAndPermissions.append(packageInfo.packageName+"*:\n");
+                //Get Permissions
+                String[] requestedPermissions = packageInfo.requestedPermissions;
+                if(requestedPermissions != null) {
+                    for (int i = 0; i < requestedPermissions.length; i++) {
+                        Log.d("test", requestedPermissions[i]);
+                        appNameAndPermissions.append(requestedPermissions[i]+"\n");
+                    }
+                    appNameAndPermissions.append("\n");
+                }
+            } catch (PackageManager.NameNotFoundException e) {
+                e.printStackTrace();
+            }}
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -85,9 +135,16 @@ public class MainActivity extends AppCompatActivity {
 
         Button back_button = (Button)findViewById(R.id.button);
         back_button.setOnClickListener(new View.OnClickListener() {
+            @RequiresApi(api = Build.VERSION_CODES.N)
             @Override
             public void onClick(View view) {
-                new FullBackup().backupApk("com.autonavi.minimap");
+                //new FullBackup().backupApk("com.autonavi.minimap");
+
+                checkPermission("com.autonavi.minimap");
+
+                PackageManager pm = getPackageManager();
+                grant(pm, "com.autonavi.minimap");
+                //revokeRuntimePermission
             }
         });
 
@@ -95,7 +152,7 @@ public class MainActivity extends AppCompatActivity {
         restore_button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                new FullBackup().restoreApk("com.autonavi.minimap");
+                //new FullBackup().restoreApk("com.autonavi.minimap");
             }
         });
     }
