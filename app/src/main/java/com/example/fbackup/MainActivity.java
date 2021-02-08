@@ -6,6 +6,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
@@ -85,74 +86,42 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-
-    @RequiresApi(api = Build.VERSION_CODES.N)
-    private void grant(PackageManager packageManager, String pkgName) {
-        try {
-            int uid = packageManager.getApplicationInfo("com.android.settings", 0).uid;
-            UserHandle userHandle = UserHandle.getUserHandleForUid(uid);
-
-            Class<?> refPackageManager = packageManager.getClass();
-            Method refGrantRuntimePermission = refPackageManager.getDeclaredMethod("grantRuntimePermission", String.class, String.class, UserHandle.class);
-            refGrantRuntimePermission.setAccessible(true);
-            refGrantRuntimePermission.invoke(packageManager, pkgName, Manifest.permission.READ_EXTERNAL_STORAGE, userHandle);
-        } catch (Exception e) {
-
-        }
-    }
-
-    private void checkPermission(String pkgName) {
-        StringBuffer appNameAndPermissions=new StringBuffer();
-        PackageManager pm = getPackageManager();
-        List<ApplicationInfo> packages = pm.getInstalledApplications(PackageManager.GET_META_DATA);
-        for (ApplicationInfo applicationInfo : packages) {
-            if(!applicationInfo.packageName.equals(pkgName))
-                continue;
-            Log.d("test", "App: " + applicationInfo.name + " Package: " + applicationInfo.packageName);
-            try {
-                PackageInfo packageInfo = pm.getPackageInfo(applicationInfo.packageName, PackageManager.GET_PERMISSIONS);
-                appNameAndPermissions.append(packageInfo.packageName+"*:\n");
-                //Get Permissions
-                String[] requestedPermissions = packageInfo.requestedPermissions;
-                if(requestedPermissions != null) {
-                    for (int i = 0; i < requestedPermissions.length; i++) {
-                        Log.d("test", requestedPermissions[i]);
-                        appNameAndPermissions.append(requestedPermissions[i]+"\n");
-                    }
-                    appNameAndPermissions.append("\n");
-                }
-            } catch (PackageManager.NameNotFoundException e) {
-                e.printStackTrace();
-            }}
-    }
-
+    /**
+     * You can test by follow steps:
+     * 1) use the apk that you want to backup.
+     * 2) backup it, you can change var "final String pkgName" to your apk name.
+     * 3) run this app, then click "备份".
+     * 4) make sure the backup file is generated in "/storage/emulated/0/fBackup/{pkgName}/backup.ab".
+     * 5) clear the app data by "清除存储空间", then make sure the permission of your app is cleared too.(found in 应用信息->权限).
+     * 6) restore this app by click "还原".
+     * 7) make sure the permission is restored. (found it in 应用信息->权限).
+     * 8) open your apk and make sure your data is back.
+     * */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
         requestPermission(this);
+        Context mainContext = this;
+
+        final String pkgName = "com.autonavi.minimap";
 
         Button back_button = (Button)findViewById(R.id.button);
         back_button.setOnClickListener(new View.OnClickListener() {
             @RequiresApi(api = Build.VERSION_CODES.N)
             @Override
             public void onClick(View view) {
-                //new FullBackup().backupApk("com.autonavi.minimap");
-
-                checkPermission("com.autonavi.minimap");
-
-                PackageManager pm = getPackageManager();
-                grant(pm, "com.autonavi.minimap");
-                //revokeRuntimePermission
+                new FullBackup().backupApk(mainContext, pkgName);
             }
         });
 
         Button restore_button = (Button)findViewById(R.id.button2);
         restore_button.setOnClickListener(new View.OnClickListener() {
+            @RequiresApi(api = Build.VERSION_CODES.N)
             @Override
             public void onClick(View view) {
-                //new FullBackup().restoreApk("com.autonavi.minimap");
+                new FullBackup().restoreApk(mainContext, pkgName);
             }
         });
     }

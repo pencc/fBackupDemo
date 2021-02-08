@@ -1,19 +1,109 @@
 package com.example.fbackup;
 
+import android.Manifest;
+import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Environment;
 import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
+import android.os.UserHandle;
 import android.util.Log;
 
+import androidx.annotation.RequiresApi;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.channels.FileChannel;
+import java.util.List;
 
 public class FullBackup {
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    private void restorePermission(Context context, String pkgName, String srcFilePath) {
+        String pLine;
+        try {
+            PackageManager packageManager = context.getPackageManager();
+            int uid = packageManager.getApplicationInfo("com.android.settings", 0).uid;
+            UserHandle userHandle = UserHandle.getUserHandleForUid(uid);
+
+            Class<?> refPackageManager = packageManager.getClass();
+            Method refGrantRuntimePermission = refPackageManager.getDeclaredMethod("grantRuntimePermission", String.class, String.class, UserHandle.class);
+            refGrantRuntimePermission.setAccessible(true);
+
+            File file = new File(srcFilePath);
+            if (!file.exists()) { // if permission xml file is not exist, we should not config permissions
+                Log.e("restorePermission", "restore permission file not exist: " + srcFilePath);
+                return;
+            }
+
+            BufferedReader br = new BufferedReader(new FileReader(file));
+            while ((pLine = br.readLine()) != null) {
+                if(pLine.startsWith("android.permission.")) {
+                    String permisson = pLine.trim();
+                    try {
+                        refGrantRuntimePermission.invoke(packageManager, pkgName, permisson, userHandle);
+                    } catch (Exception e) {
+                        /**
+                         * not all permission can be granted, so we have many Exception in there,
+                         * so what we can do is ignore them.
+                         * */
+                    }
+                }
+            }
+            br.close();
+        } catch (Exception e) {
+            Log.e("restorePermission", "" + e.getMessage());
+        }
+    }
+
+    private void savePermission(Context context, String pkgName, String dstFilePath) {
+        StringBuffer appNameAndPermissions=new StringBuffer();
+        PackageManager pm = context.getPackageManager();
+        List<ApplicationInfo> packages = pm.getInstalledApplications(PackageManager.GET_META_DATA);
+        for (ApplicationInfo applicationInfo : packages) {
+            if(!applicationInfo.packageName.equals(pkgName))
+                continue;
+            try {
+                PackageInfo packageInfo = pm.getPackageInfo(applicationInfo.packageName, PackageManager.GET_PERMISSIONS);
+                //Get Permissions
+                String[] requestedPermissions = packageInfo.requestedPermissions;
+                if(requestedPermissions != null) {
+                    for (int i = 0; i < requestedPermissions.length; i++) {
+                        if(requestedPermissions[i].startsWith("android.permission.")
+                                && 0 != (packageInfo.requestedPermissionsFlags[i]  & PackageInfo.REQUESTED_PERMISSION_GRANTED)) {
+                            appNameAndPermissions.append(requestedPermissions[i] + "\n");
+                        }
+                    }
+                    try {
+                        File file = new File(dstFilePath);
+
+                        if (!file.exists()) {
+                            file.createNewFile();
+                        }
+
+                        FileWriter fw = new FileWriter(file.getAbsoluteFile());
+                        BufferedWriter bw = new BufferedWriter(fw);
+                        bw.write("" + appNameAndPermissions);
+                        bw.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            } catch (PackageManager.NameNotFoundException e) {
+                e.printStackTrace();
+            }}
+    }
 
     private void copyFile_channelCopy(String src_file, String dst_file) {
         FileInputStream fin = null;
@@ -44,7 +134,7 @@ public class FullBackup {
 
     // the apk{mPkgName} will backup to /storage/emulated/0/fBackup/{mPkgName}/backup.ab
     // "/storage/emulated/0/fTmp/{mPkgName}/" is the tmp dir in backuping and restoring
-    public void backupApk(String mPkgName) {
+    public void backupApk(Context context, String mPkgName) {
         // /storage/emulated/0/backup/{pkgname}/backup.ab
         String sdPath = Environment.getExternalStorageDirectory().getPath();
         try {
@@ -117,6 +207,10 @@ public class FullBackup {
                                 sdPath + "/fBackup/" + mPkgName + "/backup.ab");
                         // delete orig file to free space
                         file.delete();
+
+                        // backup permission
+                        savePermission(context, mPkgName, sdPath + "/fBackup/" + mPkgName + "/backup.xml");
+
                         break;
                     }
                     i++;                }
@@ -156,7 +250,8 @@ public class FullBackup {
         }
     }
 
-    public void restoreApk(String mPkgName) {
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    public void restoreApk(Context context, String mPkgName) {
         try {
             String sdPath = Environment.getExternalStorageDirectory().getPath();
 
@@ -197,6 +292,8 @@ public class FullBackup {
 
                         method.setAccessible(true);
                         method.invoke(backupManager, parcelFileDescriptor);
+
+                        restorePermission(context, mPkgName, sdPath + "/fBackup/" + mPkgName + "/backup.xml");
                         break;
                     }
                     i++;                }
